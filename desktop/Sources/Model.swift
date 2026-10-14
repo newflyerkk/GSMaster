@@ -20,9 +20,19 @@ class CompressorModel: ObservableObject {
     @Published var showingHistory=false
     @Published var previewItem:PreviewItem?=nil
     @Published var historyWarning=""
+    let preferences:UserDefaults
+    var restoringPreferences=true
     let historyStore:HistoryStore
-    init(historyURL:URL = HistoryStore.defaultURL){
+    init(historyURL:URL = HistoryStore.defaultURL, preferences:UserDefaults = .standard){
+        self.preferences=preferences
         historyStore=HistoryStore(url:historyURL)
+        if let saved=preferences.dictionary(forKey:"GS-Master-settings-v1") {
+            preset=saved["preset"] as? String ?? preset;videoFormat=saved["videoFormat"] as? String ?? videoFormat
+            overwrite=saved["overwrite"] as? Bool ?? overwrite;backup=saved["backup"] as? Bool ?? backup;mute=saved["mute"] as? Bool ?? mute
+            maxDimension=saved["maxDimension"] as? Int ?? maxDimension;fps=saved["fps"] as? Int ?? fps
+            output=saved["output"] as? String ?? output;advanced=saved["advanced"] as? Bool ?? advanced
+        }
+        restoringPreferences=false
         do{history=try historyStore.load()}catch{historyWarning="历史记录读取失败，原记录未修改。"}
     }
     func reveal(_ entry:HistoryEntry){
@@ -38,14 +48,14 @@ class CompressorModel: ObservableObject {
     func saveHistory(){do{try historyStore.save(history);historyWarning=""}catch{historyWarning="历史记录保存失败："+error.localizedDescription}}
     func clearHistory(){history=[];saveHistory()}
 
-    @Published var preset="balanced"
-    @Published var videoFormat="same"
-    @Published var output=FileManager.default.urls(for:.downloadsDirectory,in:.userDomainMask).first!.path
-    @Published var overwrite=false
-    @Published var backup=true
-    @Published var maxDimension=0
-    @Published var fps=0
-    @Published var mute=false
+    @Published var preset="balanced" {didSet{savePreferences()}}
+    @Published var videoFormat="same" {didSet{savePreferences()}}
+    @Published var output=FileManager.default.urls(for:.downloadsDirectory,in:.userDomainMask).first!.path {didSet{savePreferences()}}
+    @Published var overwrite=false {didSet{savePreferences()}}
+    @Published var backup=true {didSet{savePreferences()}}
+    @Published var maxDimension=0 {didSet{savePreferences()}}
+    @Published var fps=0 {didSet{savePreferences()}}
+    @Published var mute=false {didSet{savePreferences()}}
     @Published var busy=false
     @Published var message="添加文件或文件夹，先预估，再开始压缩。"
     @Published var completed=0
@@ -53,16 +63,17 @@ class CompressorModel: ObservableObject {
     @Published var cancelRequested=false
     @Published var latestOutput:String?=nil
     @Published var latestBackup:String?=nil
-    @Published var advanced=false
+    @Published var advanced=false {didSet{savePreferences()}}
     let cache=FileManager.default.temporaryDirectory.appendingPathComponent("GSMaster-"+UUID().uuidString)
     var process:Process?
     var currentAction=""
+    func savePreferences(){guard !restoringPreferences else{return};var saved=settings;saved["advanced"]=advanced;preferences.set(saved,forKey:"GS-Master-settings-v1")}
     var settings:[String:Any] {["preset":preset,"videoFormat":videoFormat,"overwrite":overwrite,"backup":backup,"output":output,"maxDimension":maxDimension,"fps":fps,"mute":mute]}
     var selectedCount:Int {rows.filter{$0.selected}.count}
     func invalidate(){for i in rows.indices {rows[i].preview="—";rows[i].saving="—";rows[i].status="待预估";rows[i].note="";rows[i].resultSize=nil;rows[i].previewPath=nil;rows[i].samplePreview=false};message="设置已更新，请重新预估。"}
     func addPanel(){let panel=NSOpenPanel();panel.title="选择图片、视频或文件夹";panel.canChooseFiles=true;panel.canChooseDirectories=true;panel.allowsMultipleSelection=true;if panel.runModal() == .OK{add(panel.urls)}}
     func chooseOutput(){let panel=NSOpenPanel();panel.title="选择结果文件夹的存放位置";panel.canChooseFiles=false;panel.canChooseDirectories=true;panel.canCreateDirectories=true;if panel.runModal() == .OK,let url=panel.url{output=url.path}}
-    func add(_ urls:[URL]){guard !busy else{return};showingHistory=false;cancelRequested=false;launch(["action":"scan","roots":urls.map{$0.path}])}
+    func add(_ urls:[URL]){guard !busy else{return};showingHistory=false;cancelRequested=false;launch(["action":"scan","roots":urls.map{$0.path},"cache":cache.appendingPathComponent("archives").path])}
     func start(_ action:String){guard !busy,selectedCount>0 else{return};completed=0;total=selectedCount;cancelRequested=false;latestOutput=nil;latestBackup=nil
         launch(["action":action,"rows":rows.map{$0.json},"settings":settings,"cache":cache.path])
     }

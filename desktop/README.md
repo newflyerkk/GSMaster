@@ -1,4 +1,4 @@
-# GS Master 本地压缩工具 1.2.1
+# GS Master 本地压缩工具 1.3.0
 
 原生 macOS 窗口，离线处理图片与视频。当前构建适用于 **Apple Silicon（M 系列）和 macOS 26 或更新版本**。无需另装 Node、FFmpeg 或 Homebrew，编码器已包含在应用内。
 
@@ -93,7 +93,7 @@ https://developer.apple.com/documentation/swiftui/view/glasseffect(_:in:)
 - 特殊选项紧邻压缩档位，更改位置紧邻输出路径。
 - 保留紧凑窗口、玻璃面板和深浅色外观。
 
-## 1.2.1 蓝色玻璃风格
+## 1.3.0 蓝色玻璃风格
 
 - 对齐 Figma 插件最新蓝色主题：蓝色渐变胶囊按钮、浅蓝灰背景、半透明卡片及细描边。
 - 应用图标同步改为蓝色；保留 44pt 主要操作按钮和紧凑布局。

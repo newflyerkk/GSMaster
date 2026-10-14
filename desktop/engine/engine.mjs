@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import os from 'node:os';
 import crypto from 'node:crypto';
 import {spawn} from 'node:child_process';
 import {createRequire} from 'node:module';
@@ -30,7 +31,7 @@ async function stat(p){const s=await fs.stat(p);return {size:s.size,mtime:s.mtim
 async function digest(p){const h=crypto.createHash('sha256');const f=await fs.open(p);try{for await(const b of f.createReadStream())h.update(b);}finally{await f.close();}return h.digest('hex');}
 async function exists(p){return fs.stat(p).then(()=>true,()=>false);}
 const copy=(a,b)=>fs.copyFile(a,b,1);
-export async function scan(roots){
+export async function scan(roots,archiveCache=path.join(os.tmpdir(),'GS-Master-archives')){
  const rows=[],seen=new Set(),labels=new Map();let skipped=0;
  for(const raw of roots){
   const root=path.resolve(raw),s=await fs.lstat(root);if(s.isSymbolicLink()){skipped++;continue;}
@@ -42,6 +43,17 @@ export async function scan(roots){
     if(p!==root&&(path.basename(p).startsWith('.')||p.endsWith('.app'))){skipped++;return;}
     for(const name of (await fs.readdir(p)).sort())await visit(path.join(p,name),path.join(rel,name));
    }else if(v.isFile()){
+    if(/\.(zip|rar|7z)$/i.test(p)){
+     if(v.size>1024*1024*1024)throw Error('压缩包超过 1 GB，请分批导入。');
+     const bytes=await fs.readFile(p),hash=crypto.createHash('sha256').update(p).update(bytes).digest('hex');
+     if(seen.has('archive:'+hash))return;seen.add('archive:'+hash);
+     const destination=path.join(archiveCache,hash);const codecs=await loadCodecs();
+     const files=await codecs.unpackArchive(new Uint8Array(bytes),name=>!!kind(name),1024*1024*1024);
+     await fs.mkdir(destination,{recursive:true});
+     const archiveName=path.basename(p,path.extname(p));
+     for(const file of files){check();const target=path.join(destination,file.path);await fs.mkdir(path.dirname(target),{recursive:true});await fs.writeFile(target,file.bytes);await visit(target,path.join(rel?path.dirname(rel):'',archiveName,file.path));}
+     return;
+    }
     const k=kind(p);if(!k){skipped++;return;}const real=await fs.realpath(p);if(seen.has(real))return;seen.add(real);
     rows.push({id:crypto.createHash('sha256').update(real).digest('hex'),path:p,relative:rel||path.basename(p),name:path.basename(p),kind:k,size:v.size,selected:true,status:'待预估'});
    }
@@ -167,10 +179,11 @@ async function uniqueFolder(base,label){await fs.mkdir(base,{recursive:true});fo
 function safeRelative(p){if(path.isAbsolute(p)||p.split(path.sep).includes('..'))throw Error('无效输出路径');return p;}
 export async function batch(request,report=emit){
  const s=normalized(request.settings),rows=request.rows.filter(r=>r.selected!==false),cache=request.cache;
+ const archiveRow=row=>path.resolve(row.path).startsWith(path.resolve(cache,'archives')+path.sep);
  if(!rows.length)throw Error('请先选择文件');
  let outputRoot=null,backupRoot=null,done=0,failed=0,log=[];
  const stamp=new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);
- if(request.action==='compress'&&(!s.overwrite||rows.some(r=>outputExt(r,s)!==ext(r.path)))){
+ if(request.action==='compress'&&(!s.overwrite||rows.some(r=>archiveRow(r)||outputExt(r,s)!==ext(r.path)))){
   if(!s.output)throw Error('请选择输出位置');outputRoot=await uniqueFolder(s.output,'GSMaster-'+stamp);
  }
  const used=new Set();
@@ -179,7 +192,7 @@ export async function batch(request,report=emit){
   try{
    const result=await prepare(row,s,cache,request.action==='estimate');check();let dest=null;
    if(request.action==='compress'){
-    if(s.overwrite&&outputExt(row,s)===ext(row.path)){
+    if(s.overwrite&&!archiveRow(row)&&outputExt(row,s)===ext(row.path)){
      if(await digest(row.path)!==result.hash)throw Error('原文件已变化，已停止覆盖');
      if(result.size===result.original&&result.note.startsWith('无需压缩')){dest=row.path;}
      else{
@@ -215,5 +228,5 @@ export async function batch(request,report=emit){
  report({type:'done',done,failed,cancelled,output:outputRoot,backup:backupRoot});
 }
 if(process.argv[1]===fileURLToPath(import.meta.url)){
- try{const request=JSON.parse(await fs.readFile(process.argv[2],'utf8'));if(request.action==='scan')emit({type:'scan',...await scan(request.roots)});else await batch(request);}catch(e){emit({type:'fatal',error:e.message});process.exitCode=1;}
+ try{const request=JSON.parse(await fs.readFile(process.argv[2],'utf8'));if(request.action==='scan')emit({type:'scan',...await scan(request.roots,request.cache)});else await batch(request);}catch(e){emit({type:'fatal',error:e.message});process.exitCode=1;}
 }

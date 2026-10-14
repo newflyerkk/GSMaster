@@ -35,3 +35,15 @@ test('JPEG / WebP / HEIC / TIFF 均按原格式输出且可解码',async()=>{
 test('备份关闭时可安全覆盖，不生成备份目录',async()=>{const f=path.join(root,'no-backup.png');await png(f);await fs.appendFile(f,Buffer.alloc(12000));const messages=[];await batch({action:'compress',settings:{...settings,overwrite:true,backup:false},rows:[await row(f)],cache},v=>messages.push(v));const d=messages.find(v=>v.type==='done');assert.equal(d.failed,0);assert.equal(d.backup,null);assert.ok((await fs.stat(f)).size<12000);});
 test('同名独立来源和转格式冲突分文件夹保存，文件名不变',async()=>{const a=await png(path.join(root,'a','same.png')),b=await png(path.join(root,'b','same.png'));const messages=[];await batch({action:'compress',settings,rows:(await scan([a,b])).rows,cache},v=>messages.push(v));const r=messages.filter(v=>v.type==='result');assert.equal(r.length,2);assert.notEqual(r[0].destination,r[1].destination);assert.equal(path.basename(r[1].destination),'same.png');});
 test('图片尺寸限制与视频分辨率/帧率/静音选项生效',async()=>{const large=path.join(root,'large.jpg');ff(['-f','lavfi','-i','testsrc2=size=1800x1400:rate=1','-frames:v','1',large]);const v=await prepare(await row(large),{...settings,maxDimension:1280},cache,true);const i=JSON.parse(execFileSync(process.env.DC_HELPER,['--inspect',v.file]));assert.equal(i.width,1280);const vid=await prepare(await row(video),{...settings,mute:true,fps:30},cache);const pr=probe(vid.file);assert.equal(pr.streams.filter(s=>s.codec_type==='audio').length,0);assert.equal(pr.streams[0].avg_frame_rate,'30/1');});
+test('ZIP、RAR、7z 素材导入保留名称并进入队列',async()=>{
+ const {zipSync}=await import('fflate');
+ const zip=path.join(root,'素材.zip');await fs.writeFile(zip,zipSync({'子目录/界面.png':new Uint8Array(await fs.readFile(p)),'readme.txt':new Uint8Array([1])}));
+ const result=await scan([zip],path.join(cache,'archives'));assert.equal(result.rows.length,1);assert.equal(result.rows[0].name,'界面.png');assert.equal(result.rows[0].relative,path.join('素材','子目录','界面.png'));assert.ok(await fs.stat(zip));
+ for(const name of ['lzma2.7z','v4.rar','v5.rar']){const archive=path.join('/tmp/dc-archive-fixtures',name);try{await fs.stat(archive);}catch{continue;}const r=await scan([archive],path.join(cache,'archives'));assert.ok(r.rows.some(row=>row.name==='image.png'));}
+});
+test('压缩包越界路径拒绝导入，不写出缓存目录',async()=>{
+ const {zipSync}=await import('fflate');const zip=path.join(root,'bad-path.zip');await fs.writeFile(zip,zipSync({'../escaped.png':new Uint8Array([1])}));await assert.rejects(scan([zip],path.join(cache,'archives')),/不安全路径/);
+});
+test('压缩包素材即使选择覆盖也必须另存结果，保留原包',async()=>{
+ const {zipSync}=await import('fflate');const zip=path.join(root,'archive-safe.zip'),before=zipSync({'image.png':new Uint8Array(await fs.readFile(p))});await fs.writeFile(zip,before);const scanned=await scan([zip],path.join(cache,'archives')),messages=[];await batch({action:'compress',settings:{...settings,overwrite:true},rows:scanned.rows,cache},m=>messages.push(m));const result=messages.find(m=>m.type==='result');assert.ok(result,JSON.stringify(messages));assert.ok(result.destination.startsWith(out));assert.deepEqual(new Uint8Array(await fs.readFile(zip)),before);
+});

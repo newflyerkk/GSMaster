@@ -7,7 +7,13 @@ import AppKit
   defer{try? FileManager.default.removeItem(at:dir)}
   let history=dir.appendingPathComponent("history.json"),file=dir.appendingPathComponent("result.png")
   try Data([1,2,3]).write(to:file)
-  let model=CompressorModel(historyURL:history)
+  let suite="GS-Master-test-"+UUID().uuidString
+  let defaults=UserDefaults(suiteName:suite)!
+  defer{defaults.removePersistentDomain(forName:suite)}
+  let model=CompressorModel(historyURL:history,preferences:defaults)
+  model.backup=false;model.overwrite=true;model.mute=true;model.preset="quality"
+  let preferencesReloaded=CompressorModel(historyURL:history,preferences:defaults)
+  precondition(!preferencesReloaded.backup && preferencesReloaded.overwrite && preferencesReloaded.mute && preferencesReloaded.preset=="quality","Preferences should survive reopening")
   func row(_ id:String)->[String:Any]{["id":id,"path":dir.appendingPathComponent(id+".png").path,"relative":id+".png","name":id+".png","kind":"image","size":100]}
   model.receive(["type":"scan","rows":[row("old")],"skipped":0])
   model.receive(["type":"scan","rows":[row("new1"),row("new2"),row("old")],"skipped":0])
@@ -21,7 +27,7 @@ import AppKit
   precondition(!model.rows[0].selected && model.rows[1].selected && model.history.count==1)
   model.receive(["type":"error","id":"new2","error":"failed"])
   precondition(model.rows[1].selected)
-  let reopened=CompressorModel(historyURL:history)
+  let reopened=CompressorModel(historyURL:history,preferences:defaults)
   precondition(reopened.history.count==1 && reopened.history[0].resolvedURL().resolvingSymlinksInPath().path==file.resolvingSymlinksInPath().path)
   model.invalidate();precondition(model.rows[0].previewPath==nil)
   reopened.clearHistory();let cleared=try HistoryStore(url:history).load();precondition(cleared.isEmpty)

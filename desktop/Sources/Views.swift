@@ -99,7 +99,7 @@ struct MainView:View {
     var header:some View {
         HStack(spacing:12){
             Image(systemName:"arrow.down.right.and.arrow.up.left").font(.system(size:18,weight:.semibold)).foregroundStyle(accent).frame(width:36,height:36).background(accent.opacity(0.10),in:RoundedRectangle(cornerRadius:12)).overlay(RoundedRectangle(cornerRadius:12).strokeBorder(.white.opacity(0.6))).accessibilityHidden(true)
-            VStack(alignment:.leading,spacing:2){Text("GS Master").font(.system(size:20,weight:.bold,design:.rounded));Text("本地压缩 · 1.2.1").font(.caption).foregroundStyle(.secondary)}
+            VStack(alignment:.leading,spacing:2){Text("GS Master").font(.system(size:20,weight:.bold,design:.rounded));Text("本地压缩 · 1.3.0").font(.caption).foregroundStyle(.secondary)}
             Spacer()
             Picker("导航",selection:$model.showingHistory){Text("压缩队列").tag(false);Text("历史 \(model.history.count)").tag(true)}.pickerStyle(.segmented).labelsHidden().frame(width:180)
             Button(action:model.addPanel){Label("添加",systemImage:"plus").font(.system(size:14,weight:.semibold)).foregroundStyle(.white).frame(minWidth:72,minHeight:28)}.buttonStyle(ActionButtonStyle(prominent:true)).disabled(model.busy).keyboardShortcut("o")
@@ -128,7 +128,7 @@ struct MainView:View {
             HStack{Text("文件").frame(maxWidth:.infinity,alignment:.leading);Text("原大小").frame(width:65,alignment:.trailing);Text("压缩后 · 点击预览").frame(width:145,alignment:.trailing);Text("节省").frame(width:62,alignment:.trailing);Text("状态").frame(width:84,alignment:.leading)}.font(.system(size:11,weight:.medium)).foregroundStyle(.secondary).padding(.horizontal,14).padding(.vertical,10)
             Divider()
             if model.rows.isEmpty{
-                VStack(spacing:10){Image(systemName:"square.and.arrow.down.on.square").font(.system(size:32,weight:.light)).foregroundStyle(accent);Text("拖入文件或整个文件夹").font(.headline);Text("图片与视频 · 子文件夹自动识别").font(.callout).foregroundStyle(.secondary);Button(action:model.addPanel){Label("选择文件",systemImage:"folder.badge.plus").font(.system(size:14,weight:.semibold)).foregroundStyle(.white).frame(minWidth:128,minHeight:30)}.buttonStyle(ActionButtonStyle(prominent:true)).disabled(model.busy).padding(.top,6)}.frame(maxWidth:.infinity,maxHeight:.infinity)
+                VStack(spacing:10){Image(systemName:"square.and.arrow.down.on.square").font(.system(size:32,weight:.light)).foregroundStyle(accent);Text("拖入文件、文件夹或压缩包").font(.headline);Text("图片与视频 · ZIP / RAR / 7z").font(.callout).foregroundStyle(.secondary);Button(action:model.addPanel){Label("选择文件",systemImage:"folder.badge.plus").font(.system(size:14,weight:.semibold)).foregroundStyle(.white).frame(minWidth:128,minHeight:30)}.buttonStyle(ActionButtonStyle(prominent:true)).disabled(model.busy).padding(.top,6)}.frame(maxWidth:.infinity,maxHeight:.infinity)
             }else{
                 ScrollView{LazyVStack(spacing:0){ForEach($model.rows){$row in
                     HStack(spacing:9){
