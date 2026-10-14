@@ -1,0 +1,20 @@
+node_modules/
+.DS_Store
+desktop/build/
+desktop/release/
+desktop/tests/ui-output/
+desktop/tests/bundle-output/
+desktop/engine/codecs.cjs
+
+# Distribution packages are published as release assets, not source history.
+*.zip
+repaired/
+extension 2/
+# Local visual QA and source image samples.
+tests/fixtures/
+tests/sample-results/
+tests/*.png
+tests/browser-results.json
+tests/video-fixtures/*-output.mp4
+tests/video-fixtures/browser-*.mp4
+desktop/tests/ui-input/

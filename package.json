@@ -1,0 +1,29 @@
+{
+  "name": "gsmaster-local",
+  "version": "1.2.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node desktop/build-codecs.mjs",
+    "build:app": "./desktop/build.sh",
+    "test": "node --test desktop/tests/engine.test.mjs"
+  },
+  "dependencies": {
+    "@jsquash/jpeg": "^1.6.0",
+    "@jsquash/oxipng": "^2.3.0",
+    "@jsquash/png": "^3.1.1",
+    "@jsquash/webp": "^1.5.0",
+    "fflate": "^0.8.3",
+    "mediabunny": "^1.61.3",
+    "mux.js": "^6.3.0",
+    "pdf-lib": "^1.17.1",
+    "svgo": "^4.1.0",
+    "upng-js": "^2.1.0"
+  },
+  "devDependencies": {
+    "@figma/plugin-typings": "^1.141.0",
+    "@playwright/test": "^1.64.0",
+    "esbuild": "^0.28.2",
+    "typescript": "^7.0.2"
+  }
+}
