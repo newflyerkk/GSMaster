@@ -99,7 +99,7 @@ struct MainView:View {
     var header:some View {
         HStack(spacing:12){
             Image(systemName:"arrow.down.right.and.arrow.up.left").font(.system(size:18,weight:.semibold)).foregroundStyle(accent).frame(width:36,height:36).background(accent.opacity(0.10),in:RoundedRectangle(cornerRadius:12)).overlay(RoundedRectangle(cornerRadius:12).strokeBorder(.white.opacity(0.6))).accessibilityHidden(true)
-            VStack(alignment:.leading,spacing:2){Text("GSMaster-gpt").font(.system(size:20,weight:.bold,design:.rounded));Text("本地压缩 · 1.2.0").font(.caption).foregroundStyle(.secondary)}
+            VStack(alignment:.leading,spacing:2){Text("GS Master").font(.system(size:20,weight:.bold,design:.rounded));Text("本地压缩 · 1.2.1").font(.caption).foregroundStyle(.secondary)}
             Spacer()
             Picker("导航",selection:$model.showingHistory){Text("压缩队列").tag(false);Text("历史 \(model.history.count)").tag(true)}.pickerStyle(.segmented).labelsHidden().frame(width:180)
             Button(action:model.addPanel){Label("添加",systemImage:"plus").font(.system(size:14,weight:.semibold)).foregroundStyle(.white).frame(minWidth:72,minHeight:28)}.buttonStyle(ActionButtonStyle(prominent:true)).disabled(model.busy).keyboardShortcut("o")

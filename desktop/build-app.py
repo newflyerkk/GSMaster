@@ -2,7 +2,7 @@
 """Build a self-contained app using local tools; rewrite all Homebrew dylib paths."""
 import pathlib,subprocess,shutil,os,json
 root=pathlib.Path(__file__).resolve().parent
-app=root/'build/GSMaster-gpt.app'; contents=app/'Contents'; resources=contents/'Resources'; tools=resources/'tools'
+app=root/'build/GS Master.app'; contents=app/'Contents'; resources=contents/'Resources'; tools=resources/'tools'
 for p in [contents/'MacOS',resources/'engine',tools,contents/'Frameworks']:p.mkdir(parents=True,exist_ok=True)
 shutil.copy2(root/'build/GSMaster',contents/'MacOS/GSMaster')
 for name in ['engine.mjs','codecs.cjs']:shutil.copy2(root/'engine'/name,resources/'engine'/name)
@@ -32,7 +32,7 @@ while queue:
   replacement=('@loader_path/' if dst.parent.name=='Frameworks' else '@loader_path/../../Frameworks/')+name
   subprocess.run(['install_name_tool','-change',dep,replacement,str(dst)],check=True,stderr=subprocess.DEVNULL)
  if dst.suffix=='.dylib':subprocess.run(['install_name_tool','-id','@loader_path/'+dst.name,str(dst)],check=True,stderr=subprocess.DEVNULL)
-plist='''<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>CFBundleExecutable</key><string>GSMaster</string><key>CFBundleIdentifier</key><string>local.dcmaster.compressor</string><key>CFBundleName</key><string>GSMaster-gpt</string><key>CFBundleDisplayName</key><string>GSMaster-gpt</string><key>CFBundleIconFile</key><string>AppIcon</string><key>CFBundlePackageType</key><string>APPL</string><key>CFBundleShortVersionString</key><string>1.2.0</string><key>CFBundleVersion</key><string>4</string><key>LSMinimumSystemVersion</key><string>26.0</string><key>NSHighResolutionCapable</key><true/><key>NSHumanReadableCopyright</key><string>GSMaster-gpt · Local compressor</string></dict></plist>'''
+plist='''<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>CFBundleExecutable</key><string>GSMaster</string><key>CFBundleIdentifier</key><string>local.dcmaster.compressor</string><key>CFBundleName</key><string>GS Master</string><key>CFBundleDisplayName</key><string>GS Master</string><key>CFBundleIconFile</key><string>AppIcon</string><key>CFBundlePackageType</key><string>APPL</string><key>CFBundleShortVersionString</key><string>1.2.1</string><key>CFBundleVersion</key><string>5</string><key>LSMinimumSystemVersion</key><string>26.0</string><key>NSHighResolutionCapable</key><true/><key>NSHumanReadableCopyright</key><string>GS Master · Local compressor</string></dict></plist>'''
 (contents/'Info.plist').write_text(plist)
 shutil.copy2(root/'build/AppIcon.icns',resources/'AppIcon.icns')
 shutil.copy2(root/'README.md',resources/'使用说明.md')

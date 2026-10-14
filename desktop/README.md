@@ -1,10 +1,10 @@
-# GSMaster-gpt 本地压缩工具 1.2.0
+# GS Master 本地压缩工具 1.2.1
 
 原生 macOS 窗口，离线处理图片与视频。当前构建适用于 **Apple Silicon（M 系列）和 macOS 26 或更新版本**。无需另装 Node、FFmpeg 或 Homebrew，编码器已包含在应用内。
 
 ## 使用
 
-1. 打开 `GSMaster-gpt.app`，也可以将应用复制到「应用程序」。
+1. 打开 `GS Master.app`，也可以将应用复制到「应用程序」。
 2. 拖入文件或整个文件夹，也可点击「添加文件 / 文件夹」。自动递归子目录；隐藏子目录、符号链接、应用包和不支持的文件不会进入队列。
 3. 勾选要处理的项目，选择「无损优化 / 高清 / 均衡 / 极小」。
 4. 选择输出位置；默认不覆盖源文件。点「预估压缩效果」查看每个文件的体积和节省比例，再点「开始压缩」。也可直接压缩。
@@ -82,7 +82,7 @@ node --test desktop/tests/engine.test.mjs
 - 完整试压后，点击缩略图或压缩后大小打开原文件与结果对照。长视频打开明确标注的压缩抽样片段。原地覆盖完成后仅显示压缩后文件，不将覆盖后的文件冒充原图。
 - 仅压缩成功后自动取消勾选；预估和失败不会取消勾选。
 - 历史记录保存最近 500 条完成结果，重启保留；点击条目在 Finder 中选中输出文件。文件已移走/删除时提示无法定位。清空历史不删除文件。
-- 历史文件位于 `~/Library/Application Support/GSMaster-gpt/history.json`；包含本机输出路径，不上传。
+- 历史文件位于 `~/Library/Application Support/GS Master/history.json`；包含本机输出路径，不上传。
 
 界面参考 Apple Liquid Glass，并使用 SwiftUI 原生 glassEffect API：
 https://developer.apple.com/documentation/swiftui/view/glasseffect(_:in:)
@@ -93,7 +93,7 @@ https://developer.apple.com/documentation/swiftui/view/glasseffect(_:in:)
 - 特殊选项紧邻压缩档位，更改位置紧邻输出路径。
 - 保留紧凑窗口、玻璃面板和深浅色外观。
 
-## 1.2.0 蓝色玻璃风格
+## 1.2.1 蓝色玻璃风格
 
 - 对齐 Figma 插件最新蓝色主题：蓝色渐变胶囊按钮、浅蓝灰背景、半透明卡片及细描边。
 - 应用图标同步改为蓝色；保留 44pt 主要操作按钮和紧凑布局。
