@@ -64,9 +64,9 @@ export async function scan(roots,archiveCache=path.join(os.tmpdir(),'GS-Master-a
 }
 function normalized(raw){
  const s={preset:'balanced',videoFormat:'same',overwrite:false,backup:true,maxDimension:0,fps:0,mute:false,...raw};
- if(!['lossless','quality','balanced','small'].includes(s.preset)||!['same','mp4','webm','gif'].includes(s.videoFormat))throw Error('无效压缩设置');
- if(![0,1280,1920,2560,3840].includes(s.maxDimension)||![0,24,30,60].includes(s.fps))throw Error('无效尺寸或帧率');
- if(s.preset==='lossless'&&(s.maxDimension||s.fps||s.mute||s.videoFormat!=='same'))throw Error('无损优化只保留原格式、尺寸、帧率和音轨；转格式请选择其他档位');
+ if(!['none','lossless','quality','balanced','small'].includes(s.preset)||!['same','mp4','webm','gif'].includes(s.videoFormat))throw Error('无效压缩设置');
+ if(![0,480,640,960,1280,1920,2560,3840].includes(s.maxDimension)||![0,8,12,15,24,30,60].includes(s.fps))throw Error('无效尺寸或帧率');
+ if(['none','lossless'].includes(s.preset)&&s.videoFormat!=='gif'&&(s.maxDimension||s.fps))throw Error('不压缩/无损不重新编码尺寸或帧率，请选其他档位。');
  return s;
 }
 function outputExt(row,s){return row.kind==='video'&&s.videoFormat!=='same'?s.videoFormat:ext(row.path);}
@@ -74,6 +74,7 @@ function outputRelative(row,s){const e=outputExt(row,s);return e===ext(row.path)
 async function imageInfo(p){return JSON.parse(await run(helper(),['--inspect',p]));}
 async function loadCodecs(){if(!globalThis.DCCodecs)require('./codecs.cjs');return globalThis.DCCodecs;}
 async function imageCompress(row,s,target,work){
+ if(s.preset==='none'){await copy(row.path,target);return '不压缩 · 原文件字节保持一致';}
  const e=ext(row.path),lossless=s.preset==='lossless',info=await imageInfo(row.path);
  const preserving=async reason=>{if(s.maxDimension&&Math.max(info.width,info.height)>s.maxDimension)throw Error(reason+'；暂不支持调整该文件尺寸');await copy(row.path,target);return reason;};
  if(info.width*info.height>64000000)throw Error('图片超过 6400 万像素，请先缩小后再压缩');
@@ -111,14 +112,17 @@ async function imageCompress(row,s,target,work){
 function videoPlan(info,s,e){
  const streams=info.streams||[],v=streams.filter(t=>t.codec_type==='video'&&!t.disposition?.attached_pic);
  if(v.length!==1)throw Error('暂只处理单画面视频，已保留原文件');
+ const reencoding=!['none','lossless'].includes(s.preset)||e==='gif';
  const other=streams.filter(t=>!['video','audio'].includes(t.codec_type));
- if(s.preset!=='lossless'&&other.length)throw Error('含字幕/数据轨道，暂不自动重编码以免丢失内容');
- if(s.preset!=='lossless'&&streams.some(t=>t.disposition?.attached_pic))throw Error('含封面轨道，暂保留原文件');
- if(s.preset!=='lossless'&&(/^(yuva|rgba|bgra|argb|abgr|gbrap)/.test(v[0].pix_fmt||'')||['smpte2084','arib-std-b67'].includes(v[0].color_transfer)))throw Error('透明或 HDR 视频暂仅支持无损优化，避免改变画面');
+ if(reencoding&&other.length)throw Error('含字幕/数据轨道，暂不自动重编码以免丢失内容');
+ if(reencoding&&streams.some(t=>t.disposition?.attached_pic))throw Error('含封面轨道，暂保留原文件');
+ if(reencoding&&(/^(yuva|rgba|bgra|argb|abgr|gbrap)/.test(v[0].pix_fmt||'')||['smpte2084','arib-std-b67'].includes(v[0].color_transfer)))throw Error('透明或 HDR 视频暂仅支持无损优化，避免改变画面');
  const d=Number(info.format?.duration);if(!Number.isFinite(d)||d<=0)throw Error('无法读取完整视频时长');
- if(s.preset==='lossless')return {args:['-map','0','-c','copy',...(['mp4','mov','m4v'].includes(e)?['-movflags','+faststart']:[])],duration:d,video:v[0]};
+ if(['none','lossless'].includes(s.preset)&&e!=='gif')return {args:[...(s.mute?['-map','0:v:0']:['-map','0']),'-c','copy',...(['mp4','mov','m4v'].includes(e)?['-movflags','+faststart']:[])],duration:d,video:v[0]};
  if(e==='gif'){
-  const fps=s.fps||{quality:15,balanced:12,small:8}[s.preset],limit=s.maxDimension||{quality:960,balanced:640,small:480}[s.preset];
+  const rate=String(v[0].avg_frame_rate||'24/1').split('/').map(Number),sourceFPS=rate[1]>0?rate[0]/rate[1]:24;
+  const preserve=['none','lossless'].includes(s.preset);
+  const fps=s.fps||(preserve?Math.max(1,Math.min(50,sourceFPS||24)):{quality:15,balanced:12,small:8}[s.preset]),limit=s.maxDimension||(preserve?Math.max(v[0].width,v[0].height):{quality:960,balanced:640,small:480}[s.preset]);
   const filters=`fps=${fps},scale=w='min(iw,${limit})':h='min(ih,${limit})':force_original_aspect_ratio=decrease:flags=lanczos`;
   return {args:['-filter_complex',`[0:v:0]${filters},split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=sierra2_4a[out]`,'-map','[out]','-an','-loop','0'],duration:d,video:v[0]};
  }
@@ -144,7 +148,7 @@ async function validateVideo(file,before,s,expected){
  await ff(['-xerror','-i',file,'-map','0:v','-map','0:a?','-f','null','-']);
 }
 export async function prepare(row,raw,cache,preview=false){
- const s=normalized(raw);await fs.mkdir(cache,{recursive:true});check();
+ const s=normalized(raw);if(row.kind==='image'&&raw.imageMaxDimension!==undefined)s.maxDimension=raw.imageMaxDimension;await fs.mkdir(cache,{recursive:true});check();
  const initial=await stat(row.path);if(initial.size>32*1024**3)throw Error('单文件超过 32 GB，请拆分后处理');
  const hash=await digest(row.path),key=crypto.createHash('sha256').update(hash+JSON.stringify(s)+row.path).digest('hex');
  const target=path.join(cache,key+'.'+outputExt(row,s)),meta=target+'.json';
@@ -157,7 +161,7 @@ export async function prepare(row,raw,cache,preview=false){
    const out=await imageInfo(target);if(!out.width||!out.height)throw Error('图片解码校验失败');
   }else{
    const info=await probe(row.path),plan=videoPlan(info,s,outputExt(row,s));duration=plan.duration;
-   if(preview&&s.preset!=='lossless'&&duration>12){
+   if(preview&&(!['none','lossless'].includes(s.preset)||s.videoFormat==='gif')&&duration>12){
     let size=0,total=0,previewFile=null;const len=Math.min(3,duration/10);
     for(const fraction of [0.1,0.5,0.85]){
      check();const f=path.join(work,'sample'+fraction+'.'+outputExt(row,s));
@@ -168,8 +172,9 @@ export async function prepare(row,raw,cache,preview=false){
     const estimate=Math.round(size/total*duration),same=outputExt(row,s)===ext(row.path),bounded=same&&!s.maxDimension&&!s.fps&&!s.mute?Math.min(initial.size,estimate):estimate;
     return {estimate:true,previewFile,size:bounded,low:Math.round(bounded*0.65),high:Math.round(bounded*1.4),original:initial.size,note:'三段抽样估算，实际大小受内容变化影响',hash};
    }
-   await ff(['-i',row.path,...plan.args,target]);
-   await validateVideo(target,info,s,duration);note=s.videoFormat==='gif'?'GIF · 自适应调色板与抖动 · 无限循环 · 无音轨 · 有损':s.preset==='lossless'?'无损封装优化 · 保留轨道':'完整编码与解码校验通过';
+   if(s.preset==='none'&&s.videoFormat==='same'&&!s.mute)await copy(row.path,target);
+   else try{await ff(['-i',row.path,...plan.args,target]);}catch(error){if(['none','lossless'].includes(s.preset)&&s.videoFormat!=='gif')throw Error('目标容器不兼容原视频或音轨，无法直接无损封装；请选择其他格式或有损档位。');throw error;}
+   await validateVideo(target,info,s,duration);note=s.videoFormat==='gif'?'GIF · 自适应调色板与抖动 · 无限循环 · 无音轨 · 256 色量化，非无损':s.preset==='none'?'不压缩 · 原格式直存 / 转格式只重封装':s.preset==='lossless'?'无损封装优化 · 保留轨道':'完整编码与解码校验通过';
   }
   check();
   if(hash!==await digest(row.path))throw Error('处理期间原文件发生变化，请重新预估');

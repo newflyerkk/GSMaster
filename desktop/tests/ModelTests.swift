@@ -11,9 +11,10 @@ import AppKit
   let defaults=UserDefaults(suiteName:suite)!
   defer{defaults.removePersistentDomain(forName:suite)}
   let model=CompressorModel(historyURL:history,preferences:defaults)
-  model.backup=false;model.overwrite=true;model.mute=true;model.preset="quality"
+  model.backup=false;model.overwrite=true;model.mute=true;model.preset="quality";model.imageMaxDimension=960;model.maxDimension=640;model.videoFormat="gif"
   let preferencesReloaded=CompressorModel(historyURL:history,preferences:defaults)
   precondition(!preferencesReloaded.backup && preferencesReloaded.overwrite && preferencesReloaded.mute && preferencesReloaded.preset=="quality","Preferences should survive reopening")
+  precondition(preferencesReloaded.imageMaxDimension==960 && preferencesReloaded.maxDimension==640 && preferencesReloaded.videoFormat=="gif")
   func row(_ id:String)->[String:Any]{["id":id,"path":dir.appendingPathComponent(id+".png").path,"relative":id+".png","name":id+".png","kind":"image","size":100]}
   model.receive(["type":"scan","rows":[row("old")],"skipped":0])
   model.receive(["type":"scan","rows":[row("new1"),row("new2"),row("old")],"skipped":0])

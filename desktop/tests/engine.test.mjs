@@ -70,3 +70,10 @@ test('视频转 GIF 可预估、完整解码并另存，音轨移除且原视频
 test('ZIP 内视频转 GIF 保留原视频条目并新增正确扩展名',async()=>{
  const {zipSync,unzipSync}=await import('fflate'),{saveBatch}=await import('../engine/engine.mjs');const zip=path.join(root,'video-gif.zip'),source=new Uint8Array(await fs.readFile(video));await fs.writeFile(zip,zipSync({'视频.mov':source}));const r=(await scan([zip],path.join(cache,'archives'))).rows[0],s={...settings,videoFormat:'gif',overwrite:true};const converted=await prepare(r,s,cache),messages=[];await saveBatch({rows:[{...r,...converted}],settings:s,cache},m=>messages.push(m));assert.equal(messages.at(-1).failed,0);const files=unzipSync(new Uint8Array(await fs.readFile(zip)));assert.deepEqual(files['视频.mov'],source);assert.equal(Buffer.from(files['视频.gif'].slice(0,3)).toString(),'GIF');
 });
+test('不压缩保持图片及原格式视频字节完全一致，无损允许 MOV 转 MP4',async()=>{
+ for(const source of [p,video]){const result=await prepare(await row(source),{...settings,preset:'none'},cache);assert.deepEqual(await fs.readFile(result.file),await fs.readFile(source));}
+ const converted=await prepare(await row(video),{...settings,preset:'lossless',videoFormat:'mp4'},cache);const before=probe(video),after=probe(converted.file);assert.equal(before.streams[0].codec_name,after.streams[0].codec_name);assert.ok(Math.abs(Number(after.format.duration)-15)<0.3);assert.equal(after.streams.filter(s=>s.codec_type==='audio').length,1);
+});
+test('无损与不压缩档可转 GIF，明确量化且可完整解码',async()=>{
+ for(const preset of ['lossless','none']){const result=await prepare(await row(video),{...settings,preset,videoFormat:'gif',maxDimension:480,fps:12},cache);assert.equal(probe(result.file).streams[0].codec_name,'gif');assert.ok(result.note.includes('非无损'));}
+});

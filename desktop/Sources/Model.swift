@@ -30,7 +30,7 @@ class CompressorModel: ObservableObject {
         if let saved=preferences.dictionary(forKey:"GS-Master-settings-v1") {
             preset=saved["preset"] as? String ?? preset;videoFormat=saved["videoFormat"] as? String ?? videoFormat
             overwrite=saved["overwrite"] as? Bool ?? overwrite;backup=saved["backup"] as? Bool ?? backup;mute=saved["mute"] as? Bool ?? mute
-            maxDimension=saved["maxDimension"] as? Int ?? maxDimension;fps=saved["fps"] as? Int ?? fps
+            imageMaxDimension=saved["imageMaxDimension"] as? Int ?? imageMaxDimension;maxDimension=saved["maxDimension"] as? Int ?? maxDimension;fps=saved["fps"] as? Int ?? fps
             output=saved["output"] as? String ?? output;advanced=saved["advanced"] as? Bool ?? advanced
         }
         if let pending=preferences.dictionary(forKey:"GS-Master-pending-v1"),let root=pending["root"] as? String,FileManager.default.fileExists(atPath:root){pendingSaveRoot=root;pendingRows=pending["rows"] as? [[String:Any]] ?? [];pendingSettings=pending["settings"] as? [String:Any] ?? [:];latestOutput=root}
@@ -60,6 +60,7 @@ class CompressorModel: ObservableObject {
     @Published var output=FileManager.default.urls(for:.downloadsDirectory,in:.userDomainMask).first!.path {didSet{savePreferences()}}
     @Published var overwrite=false {didSet{savePreferences()}}
     @Published var backup=true {didSet{savePreferences()}}
+    @Published var imageMaxDimension=0 {didSet{savePreferences()}}
     @Published var maxDimension=0 {didSet{savePreferences()}}
     @Published var fps=0 {didSet{savePreferences()}}
     @Published var mute=false {didSet{savePreferences()}}
@@ -80,7 +81,7 @@ class CompressorModel: ObservableObject {
     var currentAction=""
     var activeLaunchID=UUID()
     func savePreferences(){guard !restoringPreferences else{return};var saved=settings;saved["advanced"]=advanced;preferences.set(saved,forKey:"GS-Master-settings-v1")}
-    var settings:[String:Any] {["preset":preset,"videoFormat":videoFormat,"overwrite":overwrite,"backup":backup,"output":output,"maxDimension":maxDimension,"fps":fps,"mute":mute]}
+    var settings:[String:Any] {["preset":preset,"videoFormat":videoFormat,"overwrite":overwrite,"backup":backup,"output":output,"imageMaxDimension":imageMaxDimension,"maxDimension":maxDimension,"fps":fps,"mute":mute]}
     var selectedCount:Int {rows.filter{$0.selected}.count}
     func invalidate(){for i in rows.indices {rows[i].preview="—";rows[i].saving="—";rows[i].status="待预估";rows[i].note="";rows[i].resultSize=nil;rows[i].previewPath=nil;rows[i].samplePreview=false};message="设置已更新，请重新预估。"}
     func addPanel(){let panel=NSOpenPanel();panel.title="选择图片、视频或文件夹";panel.canChooseFiles=true;panel.canChooseDirectories=true;panel.allowsMultipleSelection=true;if panel.runModal() == .OK{add(panel.urls)}}
