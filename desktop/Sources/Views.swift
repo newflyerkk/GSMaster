@@ -59,7 +59,7 @@ struct Thumbnail:View {
 }
 struct QuickPreview:NSViewRepresentable {
     let url:URL
-    func makeNSView(context:Context)->QLPreviewView{let view=QLPreviewView(frame:.zero,style:.normal)!;view.autostarts=false;view.previewItem=url as NSURL;return view}
+    func makeNSView(context:Context)->QLPreviewView{let view=QLPreviewView(frame:.zero,style:.normal)!;view.autostarts=url.pathExtension.lowercased()=="gif";view.previewItem=url as NSURL;return view}
     func updateNSView(_ view:QLPreviewView,context:Context){if (view.previewItem as? NSURL) != url as NSURL{view.previewItem=url as NSURL}}
     static func dismantleNSView(_ view:QLPreviewView,coordinator:()){view.close()}
 }
@@ -99,7 +99,7 @@ struct MainView:View {
     var header:some View {
         HStack(spacing:12){
             Image(systemName:"arrow.down.right.and.arrow.up.left").font(.system(size:18,weight:.semibold)).foregroundStyle(accent).frame(width:36,height:36).background(accent.opacity(0.10),in:RoundedRectangle(cornerRadius:12)).overlay(RoundedRectangle(cornerRadius:12).strokeBorder(.white.opacity(0.6))).accessibilityHidden(true)
-            VStack(alignment:.leading,spacing:2){Text("GS Master").font(.system(size:20,weight:.bold,design:.rounded));Text("本地压缩 · 1.4.0").font(.caption).foregroundStyle(.secondary)}
+            VStack(alignment:.leading,spacing:2){Text("GS Master").font(.system(size:20,weight:.bold,design:.rounded));Text("本地压缩 · 1.5.0").font(.caption).foregroundStyle(.secondary)}
             Spacer()
             Picker("导航",selection:$model.showingHistory){Text("压缩队列").tag(false);Text("历史 \(model.history.count)").tag(true)}.pickerStyle(.segmented).labelsHidden().frame(width:180)
             Button(action:model.addPanel){Label("添加",systemImage:"plus").font(.system(size:14,weight:.semibold)).foregroundStyle(.white).frame(minWidth:72,minHeight:28)}.buttonStyle(ActionButtonStyle(prominent:true)).disabled(model.busy).keyboardShortcut("o")
@@ -112,8 +112,9 @@ struct MainView:View {
                 Picker("压缩程度",selection:$model.preset){Text("无损").tag("lossless");Text("高清").tag("quality");Text("均衡").tag("balanced");Text("极小").tag("small")}.pickerStyle(.segmented).frame(maxWidth:260).labelsHidden()
                 Button{model.advanced.toggle() }label:{Label("特殊选项",systemImage:model.advanced ? "chevron.up":"slider.horizontal.3").foregroundStyle(controlInk)}.buttonStyle(.plain).foregroundStyle(accent).padding(.horizontal,8).frame(minHeight:32).background(accent.opacity(0.07),in:RoundedRectangle(cornerRadius:16)).fixedSize(horizontal:true,vertical:false)
                 Spacer(minLength:0)
-                Picker("视频",selection:$model.videoFormat){Text("原格式").tag("same");Text("MP4").tag("mp4");Text("WebM").tag("webm")}.frame(width:155).disabled(model.preset=="lossless")
+                Picker("视频",selection:$model.videoFormat){Text("原格式").tag("same");Text("MP4").tag("mp4");Text("WebM").tag("webm");Text("GIF").tag("gif")}.frame(width:155).disabled(model.preset=="lossless")
             }
+            if model.videoFormat=="gif"{Text("GIF 无音轨、最多 256 色；高清 / 均衡 / 极小默认最长边 960 / 640 / 480，帧率 15 / 12 / 8。可在特殊选项中调整。").font(.caption).foregroundStyle(.secondary)}
             HStack(spacing:14){Toggle("原地覆盖",isOn:$model.overwrite);if model.overwrite{Toggle("覆盖前备份",isOn:$model.backup)};Spacer()}
             HStack(spacing:8){Image(systemName:"folder").foregroundStyle(.secondary).accessibilityHidden(true);Text(model.output).lineLimit(1).truncationMode(.middle).foregroundStyle(.secondary).help(model.output);Button(action:model.chooseOutput){Text("更改位置…").foregroundStyle(controlInk).padding(.horizontal,10).frame(minHeight:30).background(accent.opacity(0.07),in:RoundedRectangle(cornerRadius:16))}.buttonStyle(.plain).fixedSize();Spacer(minLength:0)}
             if model.advanced{

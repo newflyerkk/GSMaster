@@ -64,7 +64,7 @@ export async function scan(roots,archiveCache=path.join(os.tmpdir(),'GS-Master-a
 }
 function normalized(raw){
  const s={preset:'balanced',videoFormat:'same',overwrite:false,backup:true,maxDimension:0,fps:0,mute:false,...raw};
- if(!['lossless','quality','balanced','small'].includes(s.preset)||!['same','mp4','webm'].includes(s.videoFormat))throw Error('无效压缩设置');
+ if(!['lossless','quality','balanced','small'].includes(s.preset)||!['same','mp4','webm','gif'].includes(s.videoFormat))throw Error('无效压缩设置');
  if(![0,1280,1920,2560,3840].includes(s.maxDimension)||![0,24,30,60].includes(s.fps))throw Error('无效尺寸或帧率');
  if(s.preset==='lossless'&&(s.maxDimension||s.fps||s.mute||s.videoFormat!=='same'))throw Error('无损优化只保留原格式、尺寸、帧率和音轨；转格式请选择其他档位');
  return s;
@@ -117,6 +117,11 @@ function videoPlan(info,s,e){
  if(s.preset!=='lossless'&&(/^(yuva|rgba|bgra|argb|abgr|gbrap)/.test(v[0].pix_fmt||'')||['smpte2084','arib-std-b67'].includes(v[0].color_transfer)))throw Error('透明或 HDR 视频暂仅支持无损优化，避免改变画面');
  const d=Number(info.format?.duration);if(!Number.isFinite(d)||d<=0)throw Error('无法读取完整视频时长');
  if(s.preset==='lossless')return {args:['-map','0','-c','copy',...(['mp4','mov','m4v'].includes(e)?['-movflags','+faststart']:[])],duration:d,video:v[0]};
+ if(e==='gif'){
+  const fps=s.fps||{quality:15,balanced:12,small:8}[s.preset],limit=s.maxDimension||{quality:960,balanced:640,small:480}[s.preset];
+  const filters=`fps=${fps},scale=w='min(iw,${limit})':h='min(ih,${limit})':force_original_aspect_ratio=decrease:flags=lanczos`;
+  return {args:['-filter_complex',`[0:v:0]${filters},split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=sierra2_4a[out]`,'-map','[out]','-an','-loop','0'],duration:d,video:v[0]};
+ }
  if(!['mp4','mov','m4v','mkv','webm','avi'].includes(e))throw Error('该容器暂只支持无损优化，或请选择转 MP4/WebM');
  const crf={quality:19,balanced:24,small:30}[s.preset];
  let filters=[];
@@ -135,7 +140,7 @@ async function validateVideo(file,before,s,expected){
  const after=await probe(file),d=Number(after.format?.duration);
  if(!Number.isFinite(d)||Math.abs(d-expected)>Math.max(0.3,expected*0.01))throw Error('视频时长校验失败，未替换原文件');
  const count=(i,t)=>i.streams.filter(v=>v.codec_type===t).length;
- if(count(after,'video')!==count(before,'video')||(!s.mute&&count(after,'audio')!==count(before,'audio')))throw Error('音视频轨道校验失败');
+ if(count(after,'video')!==count(before,'video')||(s.videoFormat==='gif'?count(after,'audio')!==0:!s.mute&&count(after,'audio')!==count(before,'audio')))throw Error('音视频轨道校验失败');
  await ff(['-xerror','-i',file,'-map','0:v','-map','0:a?','-f','null','-']);
 }
 export async function prepare(row,raw,cache,preview=false){
@@ -156,7 +161,7 @@ export async function prepare(row,raw,cache,preview=false){
     let size=0,total=0,previewFile=null;const len=Math.min(3,duration/10);
     for(const fraction of [0.1,0.5,0.85]){
      check();const f=path.join(work,'sample'+fraction+'.'+outputExt(row,s));
-     await ff(['-ss',String(Math.min(duration-len,fraction*duration)),'-i',row.path,'-t',String(len),...plan.args,f]);
+     await ff(['-ss',String(Math.min(duration-len,fraction*duration)),'-t',String(len),'-i',row.path,...plan.args,f]);
      if(!previewFile){previewFile=path.join(cache,key+'-preview.'+outputExt(row,s));await fs.copyFile(f,previewFile);}
      const p=await probe(f),actual=Number(p.format.duration);size+=(await stat(f)).size;total+=actual;
     }
@@ -164,7 +169,7 @@ export async function prepare(row,raw,cache,preview=false){
     return {estimate:true,previewFile,size:bounded,low:Math.round(bounded*0.65),high:Math.round(bounded*1.4),original:initial.size,note:'三段抽样估算，实际大小受内容变化影响',hash};
    }
    await ff(['-i',row.path,...plan.args,target]);
-   await validateVideo(target,info,s,duration);note=s.preset==='lossless'?'无损封装优化 · 保留轨道':'完整编码与解码校验通过';
+   await validateVideo(target,info,s,duration);note=s.videoFormat==='gif'?'GIF · 自适应调色板与抖动 · 无限循环 · 无音轨 · 有损':s.preset==='lossless'?'无损封装优化 · 保留轨道':'完整编码与解码校验通过';
   }
   check();
   if(hash!==await digest(row.path))throw Error('处理期间原文件发生变化，请重新预估');
@@ -252,7 +257,7 @@ export async function saveBatch(request,report=emit){
   if(cancelled)break;
   try{
    check();const input=new Uint8Array(await fs.readFile(archive)),hash=crypto.createHash('sha256').update(input).digest('hex');if(group.some(row=>row.archiveHash!==hash))throw Error('原压缩包已变化，未覆盖');
-   const entries=codecs.readZIPEntries(input);for(const row of group)entries[row.archiveEntry]=new Uint8Array(await fs.readFile(row.file));
+   const entries=codecs.readZIPEntries(input);for(const row of group){let name=row.archiveEntry;if(ext(name)!==ext(row.file)){name=name.slice(0,-path.extname(name).length)+path.extname(row.file);if(Object.hasOwn(entries,name))throw Error('压缩包内已存在同名输出，未覆盖：'+name);}entries[name]=new Uint8Array(await fs.readFile(row.file));}
    const bytes=codecs.rewriteZIP(entries),verified=codecs.readZIPEntries(bytes);
    for(const [name,data] of Object.entries(entries))if(!verified[name]||!Buffer.from(data).equals(Buffer.from(verified[name])))throw Error('ZIP 重打包校验失败');
    const staged=path.join(request.cache,'archive-'+crypto.randomUUID()+'.zip');await fs.writeFile(staged,bytes);await replace(archive,staged,hash,path.basename(archive,path.extname(archive)));await fs.rm(staged,{force:true});

@@ -124,3 +124,7 @@ ZIP 文件名兼容未标记 UTF-8 的中文名称及 GBK 名称。原地覆盖�
 
 界面参考 Apple Liquid Glass，并使用 SwiftUI 原生 glassEffect API：
 https://developer.apple.com/documentation/swiftui/view/glasseffect(_:in:)
+
+## v1.5.0 视频转 GIF
+
+视频输出新增 GIF，支持预估和动图预览，转换后手动选择保存位置。使用自适应调色板与抖动，默认无限循环、不保留音轨。高清/均衡/极小默认最长边为 960/640/480、帧率为 15/12/8，可在特殊选项覆盖。GIF 最多 256 色，有损且体积可能大于原视频；无损档仍只保留原格式。
