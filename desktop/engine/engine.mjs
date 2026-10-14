@@ -245,7 +245,7 @@ export async function saveBatch(request,report=emit){
    check();let dest;
    if(s.overwrite&&!row.archivePath&&ext(row.path)===ext(row.file)){const label=row.relative.includes(path.sep)?row.relative.split(path.sep)[0]:path.basename(path.dirname(row.path));await replace(row.path,row.file,row.hash,label,row.relative.includes(path.sep)?row.relative.split(path.sep).slice(1).join(path.sep):path.basename(row.path));dest=row.path;}
    else{dest=path.join(s.output,safeRelative(row.relative));if(ext(dest)!==ext(row.file))dest=dest.slice(0,-path.extname(dest).length)+path.extname(row.file);await fs.mkdir(path.dirname(dest),{recursive:true});if(await exists(dest))throw Error('目标已存在，未覆盖：'+dest);await copy(row.file,dest);}
-   done++;report({...row,type:'result',destination:dest});
+   done++;report({...row,type:'result',destination:dest,previewFile:dest});
   }catch(error){failed++;report({type:'error',id:row.id,error:error.message});}
  }
  for(const [archive,group] of archives){
