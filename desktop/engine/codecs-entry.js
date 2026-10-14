@@ -1,4 +1,5 @@
 // Browser-target codecs in an isolated Node-compatible runtime; no network requests.
+import {readZIPEntries,rewriteZIP} from '../../src/zip-names.mjs';
 import {unpackArchive} from '../../src/archive.mjs';
 import UPNG from 'upng-js';
 import initOxi,{optimise as oxi} from '@jsquash/oxipng/codec/pkg/squoosh_oxipng.js';
@@ -16,7 +17,7 @@ import {visualError,pngProfiles} from '../../src/png-quality.mjs';
 const bytes=b=>Uint8Array.from(atob(b),c=>c.charCodeAt(0));
 let ready;
 async function init(){ready??=Promise.all([initOxi(bytes(oxiWasm)),initPNG(bytes(pngWasm)),initWebP({locateFile:p=>p,wasmBinary:bytes(webpWasm)}),initWebPDec({locateFile:p=>p,wasmBinary:bytes(webpDecWasm)}),initJPEG({locateFile:p=>p,wasmBinary:bytes(jpegWasm)})]);await ready;}
-globalThis.DCCodecs={unpackArchive,async encode(input,format,mode){
+globalThis.DCCodecs={unpackArchive,readZIPEntries,rewriteZIP,async encode(input,format,mode){
  await init();if(mode==='small')mode='size';const image=await pngDecode(input.slice().buffer), f=features(image);let out,note='';
  if(format==='png'){
   out=oxi(input,3,false,false);

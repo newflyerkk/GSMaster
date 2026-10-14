@@ -99,7 +99,7 @@ struct MainView:View {
     var header:some View {
         HStack(spacing:12){
             Image(systemName:"arrow.down.right.and.arrow.up.left").font(.system(size:18,weight:.semibold)).foregroundStyle(accent).frame(width:36,height:36).background(accent.opacity(0.10),in:RoundedRectangle(cornerRadius:12)).overlay(RoundedRectangle(cornerRadius:12).strokeBorder(.white.opacity(0.6))).accessibilityHidden(true)
-            VStack(alignment:.leading,spacing:2){Text("GS Master").font(.system(size:20,weight:.bold,design:.rounded));Text("本地压缩 · 1.3.0").font(.caption).foregroundStyle(.secondary)}
+            VStack(alignment:.leading,spacing:2){Text("GS Master").font(.system(size:20,weight:.bold,design:.rounded));Text("本地压缩 · 1.4.0").font(.caption).foregroundStyle(.secondary)}
             Spacer()
             Picker("导航",selection:$model.showingHistory){Text("压缩队列").tag(false);Text("历史 \(model.history.count)").tag(true)}.pickerStyle(.segmented).labelsHidden().frame(width:180)
             Button(action:model.addPanel){Label("添加",systemImage:"plus").font(.system(size:14,weight:.semibold)).foregroundStyle(.white).frame(minWidth:72,minHeight:28)}.buttonStyle(ActionButtonStyle(prominent:true)).disabled(model.busy).keyboardShortcut("o")
@@ -173,7 +173,7 @@ struct MainView:View {
             HStack(spacing:10){VStack(alignment:.leading,spacing:4){Text(model.message).font(.system(size:12)).lineLimit(2);Text("图片实际试压 · 长视频抽样估算 · 全程离线").font(.system(size:11)).foregroundStyle(.secondary)}.frame(maxWidth:.infinity,alignment:.leading)
                 if model.busy{Button(action:model.cancel){Text(model.cancelRequested ? "正在取消…":"取消").frame(minWidth:90,minHeight:30)}.controlSize(.large).disabled(model.cancelRequested).buttonStyle(.glass)}else if !model.showingHistory{
                     Button{model.start("estimate")}label:{Label("预估效果",systemImage:"eye").font(.system(size:14,weight:.semibold)).foregroundStyle(model.selectedCount==0 ? Color.secondary:controlInk).frame(minWidth:108,minHeight:30)}.buttonStyle(ActionButtonStyle()).disabled(model.selectedCount==0)
-                    Button{model.start("compress")}label:{Label("开始压缩",systemImage:"arrow.down.right.and.arrow.up.left").font(.system(size:14,weight:.semibold)).foregroundStyle(model.selectedCount==0 ? Color.secondary:Color.white).frame(minWidth:108,minHeight:30)}.buttonStyle(ActionButtonStyle(prominent:true)).disabled(model.selectedCount==0)
+                    Button{model.start("compress")}label:{Label(model.pendingSaveRoot == nil ? "开始压缩" : "保存结果…",systemImage:"arrow.down.right.and.arrow.up.left").font(.system(size:14,weight:.semibold)).foregroundStyle(model.selectedCount==0 && model.pendingSaveRoot==nil ? Color.secondary:Color.white).frame(minWidth:108,minHeight:30)}.buttonStyle(ActionButtonStyle(prominent:true)).disabled(model.selectedCount==0 && model.pendingSaveRoot==nil)
                 }
             }
         }.padding(12).modifier(GlassPanel())

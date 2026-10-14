@@ -37,7 +37,7 @@ export async function scan(roots,archiveCache=path.join(os.tmpdir(),'GS-Master-a
   const root=path.resolve(raw),s=await fs.lstat(root);if(s.isSymbolicLink()){skipped++;continue;}
   const label=s.isDirectory()?path.basename(root):'';
   let prefix=label;if(label){let n=1;while(labels.has(prefix)&&labels.get(prefix)!==root)prefix=label+' ('+(++n)+')';labels.set(prefix,root);}
-  async function visit(p,rel){
+  async function visit(p,rel,archive=null){
    check();const v=await fs.lstat(p);if(v.isSymbolicLink()){skipped++;return;}
    if(v.isDirectory()){
     if(p!==root&&(path.basename(p).startsWith('.')||p.endsWith('.app'))){skipped++;return;}
@@ -51,11 +51,11 @@ export async function scan(roots,archiveCache=path.join(os.tmpdir(),'GS-Master-a
      const files=await codecs.unpackArchive(new Uint8Array(bytes),name=>!!kind(name),1024*1024*1024);
      await fs.mkdir(destination,{recursive:true});
      const archiveName=path.basename(p,path.extname(p));
-     for(const file of files){check();const target=path.join(destination,file.path);await fs.mkdir(path.dirname(target),{recursive:true});await fs.writeFile(target,file.bytes);await visit(target,path.join(rel?path.dirname(rel):'',archiveName,file.path));}
+     for(const file of files){check();const target=path.join(destination,file.path);await fs.mkdir(path.dirname(target),{recursive:true});await fs.writeFile(target,file.bytes);await visit(target,path.join(rel?path.dirname(rel):'',archiveName,file.path),{archivePath:p,archiveEntry:file.path,archiveHash:crypto.createHash('sha256').update(bytes).digest('hex')});}
      return;
     }
     const k=kind(p);if(!k){skipped++;return;}const real=await fs.realpath(p);if(seen.has(real))return;seen.add(real);
-    rows.push({id:crypto.createHash('sha256').update(real).digest('hex'),path:p,relative:rel||path.basename(p),name:path.basename(p),kind:k,size:v.size,selected:true,status:'待预估'});
+    rows.push({id:crypto.createHash('sha256').update(real).digest('hex'),path:p,relative:rel||path.basename(p),name:path.basename(p),kind:k,size:v.size,selected:true,status:'待预估',...(archive||{})});
    }
   }
   await visit(root,prefix);
@@ -178,7 +178,7 @@ export async function prepare(row,raw,cache,preview=false){
 async function uniqueFolder(base,label){await fs.mkdir(base,{recursive:true});for(let n=0;;n++){const p=path.join(base,label+(n?' ('+n+')':''));try{await fs.mkdir(p);return p;}catch(e){if(e.code!=='EEXIST')throw e;}}}
 function safeRelative(p){if(path.isAbsolute(p)||p.split(path.sep).includes('..'))throw Error('无效输出路径');return p;}
 export async function batch(request,report=emit){
- const s=normalized(request.settings),rows=request.rows.filter(r=>r.selected!==false),cache=request.cache;
+ const s=normalized(request.stageOnly?{...request.settings,overwrite:false}:request.settings),rows=request.rows.filter(r=>r.selected!==false),cache=request.cache;
  const archiveRow=row=>path.resolve(row.path).startsWith(path.resolve(cache,'archives')+path.sep);
  if(!rows.length)throw Error('请先选择文件');
  let outputRoot=null,backupRoot=null,done=0,failed=0,log=[];
@@ -202,7 +202,7 @@ export async function batch(request,report=emit){
        await copy(result.file,staged);await fs.chmod(staged,(await fs.stat(row.path)).mode);
        const handle=await fs.open(staged,'r+');await handle.sync();await handle.close();check();
        if(s.backup){
-        backupRoot??=await uniqueFolder(s.output||path.dirname(row.path),'GSMaster-备份-'+stamp);
+        backupRoot??=await uniqueFolder(s.output||path.dirname(row.path),'backup_GSMaster-备份-'+stamp);
         let backup=path.join(backupRoot,safeRelative(row.relative));
         if(await exists(backup))backup=path.join(backupRoot,row.id.slice(0,10),safeRelative(row.relative));
         await fs.mkdir(path.dirname(backup),{recursive:true});await copy(row.path,backup);
@@ -224,9 +224,43 @@ export async function batch(request,report=emit){
    done++;const item={type:'result',id:row.id,...result,destination:dest};report(item);log.push({name:row.name,source:row.path,destination:dest,size:result.size,note:result.note});
   }catch(e){failed++;report({type:'error',id:row.id,error:e.message.slice(-1200)});log.push({name:row.name,error:e.message});if(cancelled)break;}
  }
- if(outputRoot)await fs.writeFile(path.join(outputRoot,'GSMaster-处理报告.json'),JSON.stringify(log,null,2));
+
  report({type:'done',done,failed,cancelled,output:outputRoot,backup:backupRoot});
 }
+export async function saveBatch(request,report=emit){
+ const s=normalized(request.settings),rows=request.rows,codecs=await loadCodecs();
+ if(s.overwrite&&rows.some(row=>row.archivePath&&ext(row.archivePath)!=='zip'))throw Error('RAR / 7z 暂不支持原地重打包，请取消原地覆盖后另存。');
+ if(!s.output)throw Error('请选择保存位置');
+ const archives=new Map(),backupFolders=new Map();let done=0,failed=0,latestBackup=null;
+ async function backup(source,label,relative=path.basename(source)){if(!s.backup)return;let folder=backupFolders.get(label);if(!folder){folder=await uniqueFolder(s.output,'backup_'+label);backupFolders.set(label,folder);}latestBackup=folder;const target=path.join(folder,safeRelative(relative));await fs.mkdir(path.dirname(target),{recursive:true});await copy(source,target);}
+ async function replace(source,file,hash,label,relative){
+  if(await digest(source)!==hash)throw Error('原文件已变化，未覆盖');await backup(source,label,relative);
+  const staged=path.join(path.dirname(source),'.gsmaster-'+crypto.randomUUID()+'.tmp');
+  try{await copy(file,staged);check();if(await digest(source)!==hash)throw Error('原文件已变化，未覆盖');await fs.rename(staged,source);}finally{await fs.rm(staged,{force:true});}
+ }
+ for(const row of rows){
+  if(cancelled)break;
+  if(s.overwrite&&row.archivePath){if(ext(row.archivePath)!=='zip')throw Error('RAR / 7z 暂不支持原地重打包，请取消原地覆盖后另存。');const group=archives.get(row.archivePath)||[];group.push(row);archives.set(row.archivePath,group);continue;}
+  try{
+   check();let dest;
+   if(s.overwrite&&!row.archivePath&&ext(row.path)===ext(row.file)){const label=row.relative.includes(path.sep)?row.relative.split(path.sep)[0]:path.basename(path.dirname(row.path));await replace(row.path,row.file,row.hash,label,row.relative.includes(path.sep)?row.relative.split(path.sep).slice(1).join(path.sep):path.basename(row.path));dest=row.path;}
+   else{dest=path.join(s.output,safeRelative(row.relative));if(ext(dest)!==ext(row.file))dest=dest.slice(0,-path.extname(dest).length)+path.extname(row.file);await fs.mkdir(path.dirname(dest),{recursive:true});if(await exists(dest))throw Error('目标已存在，未覆盖：'+dest);await copy(row.file,dest);}
+   done++;report({...row,type:'result',destination:dest});
+  }catch(error){failed++;report({type:'error',id:row.id,error:error.message});}
+ }
+ for(const [archive,group] of archives){
+  if(cancelled)break;
+  try{
+   check();const input=new Uint8Array(await fs.readFile(archive)),hash=crypto.createHash('sha256').update(input).digest('hex');if(group.some(row=>row.archiveHash!==hash))throw Error('原压缩包已变化，未覆盖');
+   const entries=codecs.readZIPEntries(input);for(const row of group)entries[row.archiveEntry]=new Uint8Array(await fs.readFile(row.file));
+   const bytes=codecs.rewriteZIP(entries),verified=codecs.readZIPEntries(bytes);
+   for(const [name,data] of Object.entries(entries))if(!verified[name]||!Buffer.from(data).equals(Buffer.from(verified[name])))throw Error('ZIP 重打包校验失败');
+   const staged=path.join(request.cache,'archive-'+crypto.randomUUID()+'.zip');await fs.writeFile(staged,bytes);await replace(archive,staged,hash,path.basename(archive,path.extname(archive)));await fs.rm(staged,{force:true});
+   for(const row of group){const preview=path.join(request.cache,'saved-preview-'+crypto.randomUUID()+path.extname(row.file));await fs.copyFile(row.file,preview);done++;report({...row,type:'result',destination:archive,previewFile:preview});}
+  }catch(error){failed+=group.length;for(const row of group)report({type:'error',id:row.id,error:error.message});}
+ }
+ report({type:'done',done,failed,cancelled,output:s.output,backup:latestBackup});
+}
 if(process.argv[1]===fileURLToPath(import.meta.url)){
- try{const request=JSON.parse(await fs.readFile(process.argv[2],'utf8'));if(request.action==='scan')emit({type:'scan',...await scan(request.roots,request.cache)});else await batch(request);}catch(e){emit({type:'fatal',error:e.message});process.exitCode=1;}
+ try{const request=JSON.parse(await fs.readFile(process.argv[2],'utf8'));if(request.action==='scan')emit({type:'scan',...await scan(request.roots,request.cache)});else if(request.action==='save')await saveBatch(request);else await batch(request);}catch(e){emit({type:'fatal',error:e.message});process.exitCode=1;}
 }

@@ -47,3 +47,18 @@ test('压缩包越界路径拒绝导入，不写出缓存目录',async()=>{
 test('压缩包素材即使选择覆盖也必须另存结果，保留原包',async()=>{
  const {zipSync}=await import('fflate');const zip=path.join(root,'archive-safe.zip'),before=zipSync({'image.png':new Uint8Array(await fs.readFile(p))});await fs.writeFile(zip,before);const scanned=await scan([zip],path.join(cache,'archives')),messages=[];await batch({action:'compress',settings:{...settings,overwrite:true},rows:scanned.rows,cache},m=>messages.push(m));const result=messages.find(m=>m.type==='result');assert.ok(result,JSON.stringify(messages));assert.ok(result.destination.startsWith(out));assert.deepEqual(new Uint8Array(await fs.readFile(zip)),before);
 });
+test('未标记 UTF-8 的中文 ZIP 文件夹正确解码',async()=>{
+ const {zipSync}=await import('fflate');const bytes=zipSync({'智慧白/圆圈背景/图.png':new Uint8Array(await fs.readFile(p))});
+ for(let i=0;i<bytes.length-10;i++){const v=new DataView(bytes.buffer);if(v.getUint32(i,true)===0x04034b50)v.setUint16(i+6,v.getUint16(i+6,true)&~2048,true);if(v.getUint32(i,true)===0x02014b50)v.setUint16(i+8,v.getUint16(i+8,true)&~2048,true);}
+ const zip=path.join(root,'中文legacy.zip');await fs.writeFile(zip,bytes);const result=await scan([zip],path.join(cache,'archives'));assert.equal(result.rows[0].relative,path.join('中文legacy','智慧白','圆圈背景','图.png'));
+});
+test('先暂存后保存，ZIP 原地覆盖名称不变且备份增加 backup 前缀',async()=>{
+ const {saveBatch}=await import('../engine/engine.mjs'),{zipSync,unzipSync}=await import('fflate');
+ const zip=path.join(root,'原始资源.zip'),before=zipSync({'子目录/图.png':new Uint8Array(await fs.readFile(p)),'notes.txt':new Uint8Array([1,2])});await fs.writeFile(zip,before);
+ const rows=(await scan([zip],path.join(cache,'archives'))).rows,events=[];await batch({action:'compress',stageOnly:true,settings:{...settings,overwrite:true},rows,cache},e=>events.push(e));assert.deepEqual(new Uint8Array(await fs.readFile(zip)),before);
+ const result=events.find(e=>e.type==='result'),pending={...rows[0],...result,file:result.destination};const saved=[];await saveBatch({action:'save',rows:[pending],settings:{...settings,overwrite:true,backup:true},cache},e=>saved.push(e));assert.equal(saved.find(e=>e.type==='result').destination,zip);const done=saved.find(e=>e.type==='done');assert.equal(done.failed,0);assert.ok(path.basename(done.backup).startsWith('backup_原始资源'));assert.deepEqual(new Uint8Array(await fs.readFile(path.join(done.backup,'原始资源.zip'))),before);assert.deepEqual(unzipSync(new Uint8Array(await fs.readFile(zip)))['notes.txt'],new Uint8Array([1,2]));
+ const files=await fs.readdir(result.destination.substring(0,result.destination.lastIndexOf(path.sep)));assert.ok(!files.includes('GSMaster-处理报告.json'));
+});
+test('GBK 中文 ZIP 名称兼容',async()=>{
+ const {zipSync}=await import('fflate');const original=zipSync({'abcd/image.png':new Uint8Array(await fs.readFile(p))}),bytes=Buffer.from(original),needle=Buffer.from('abcd/image.png'),replacement=Buffer.concat([Buffer.from([0xd6,0xd0,0xce,0xc4]),Buffer.from('/image.png')]);let from=0;while(true){const i=bytes.indexOf(needle,from);if(i<0)break;replacement.copy(bytes,i);from=i+needle.length;}const zip=path.join(root,'gbk.zip');await fs.writeFile(zip,bytes);const rows=(await scan([zip],path.join(cache,'archives'))).rows;assert.equal(rows[0].relative,path.join('gbk','中文','image.png'));
+});

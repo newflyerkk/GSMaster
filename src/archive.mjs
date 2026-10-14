@@ -1,3 +1,4 @@
+import {zipNames} from './zip-names.mjs';
 import {unzipSync} from 'fflate';
 import {ArchiveReader,libarchiveWasm} from 'libarchive-wasm';
 import wasm from 'libarchive-wasm/dist/libarchive.wasm';
@@ -6,8 +7,8 @@ export function safeArchivePath(raw){const name=raw.replaceAll('\\','/');if(!nam
 export async function unpackArchive(input,accept,maxBytes=128*1024*1024){
  if(input.length>maxBytes)throw Error('压缩包过大，请分批导入。');
  if(input[0]===0x50&&input[1]===0x4b){
-  let total=0,count=0;const entries=unzipSync(input,{filter:entry=>{if(++count>10000)throw Error('压缩包文件数量过多');const name=safeArchivePath(entry.name);if(name.split('/').some(p=>p.startsWith('.')||p==='__MACOSX')||!accept(name)||entry.name.endsWith('/'))return false;if((total+=entry.originalSize)>maxBytes)throw Error('解压后素材过大，请分批导入。');return true;}});
-  return Object.entries(entries).map(([path,bytes])=>({path:safeArchivePath(path),name:safeArchivePath(path).split('/').pop(),bytes}));
+  const names=zipNames(input);let total=0,count=0;const entries=unzipSync(input,{filter:entry=>{if(++count>10000)throw Error('压缩包文件数量过多');const name=safeArchivePath(names.get(entry.name)||entry.name);if(name.split('/').some(p=>p.startsWith('.')||p==='__MACOSX')||!accept(name)||entry.name.endsWith('/'))return false;if((total+=entry.originalSize)>maxBytes)throw Error('解压后素材过大，请分批导入。');return true;}});
+  return Object.entries(entries).map(([path,bytes])=>({path:safeArchivePath(names.get(path)||path),name:safeArchivePath(names.get(path)||path).split('/').pop(),bytes}));
  }
  ready??=libarchiveWasm({wasmBinary:Uint8Array.from(atob(wasm),c=>c.charCodeAt(0))});
  const reader=new ArchiveReader(await ready,new Int8Array(input));const files=[];let total=0,count=0;

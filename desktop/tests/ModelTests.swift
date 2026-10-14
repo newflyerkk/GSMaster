@@ -32,6 +32,17 @@ import AppKit
   model.invalidate();precondition(model.rows[0].previewPath==nil)
   reopened.clearHistory();let cleared=try HistoryStore(url:history).load();precondition(cleared.isEmpty)
   precondition(FileManager.default.fileExists(atPath:file.path),"Clear history must not delete output")
+  let pendingModel=CompressorModel(historyURL:history,preferences:defaults)
+  pendingModel.folderPicker={dir}
+  pendingModel.chooseOutput()
+  precondition(pendingModel.output==dir.path)
+  precondition(CompressorModel(historyURL:history,preferences:defaults).output==dir.path,"Chosen location must persist")
+  let staged=dir.appendingPathComponent("pending-results");try FileManager.default.createDirectory(at:staged,withIntermediateDirectories:true)
+  pendingModel.pendingSaveRoot=staged.path;pendingModel.pendingRows=[["id":"pending","path":file.path,"relative":"result.png","name":"result.png","kind":"image","original":3,"file":file.path]];pendingModel.pendingSettings=pendingModel.settings;pendingModel.currentAction="compress";pendingModel.folderPicker={nil}
+  pendingModel.receive(["type":"done","done":1,"failed":0,"output":staged.path,"cancelled":false])
+  precondition(pendingModel.pendingSaveRoot==staged.path && pendingModel.message.contains("尚未保存"),"Cancelling folder picker must preserve results")
+  let pendingReopened=CompressorModel(historyURL:history,preferences:defaults)
+  precondition(pendingReopened.pendingRows.count==1 && pendingReopened.rows.count==1,"Pending results should survive reopening")
   print("PASS: newest-first, dedupe, preview source, sample labeling, successful deselect, failure retained, history persistence, reveal path, clear without deleting files")
  }
 }
