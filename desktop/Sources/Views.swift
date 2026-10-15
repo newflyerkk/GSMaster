@@ -63,34 +63,37 @@ struct QuickPreview:NSViewRepresentable {
     let url:URL
     func makeNSView(context:Context)->QLPreviewView{let view=QLPreviewView(frame:.zero,style:.normal)!;view.autostarts=url.pathExtension.lowercased()=="gif";view.previewItem=url as NSURL;return view}
     func updateNSView(_ view:QLPreviewView,context:Context){if (view.previewItem as? NSURL) != url as NSURL{view.previewItem=url as NSURL}}
+    func sizeThatFits(_ proposal:ProposedViewSize,nsView:QLPreviewView,context:Context)->CGSize?{CGSize(width:proposal.width ?? 320,height:proposal.height ?? 240)}
     static func dismantleNSView(_ view:QLPreviewView,coordinator:()){view.close()}
 }
 struct VideoPreview:NSViewRepresentable {
     let url:URL
     func makeNSView(context:Context)->AVPlayerView{let view=AVPlayerView();view.controlsStyle = .floating;view.videoGravity = .resizeAspect;view.player=AVPlayer(url:url);view.player?.isMuted=true;view.player?.play();return view}
+    func sizeThatFits(_ proposal:ProposedViewSize,nsView:AVPlayerView,context:Context)->CGSize?{CGSize(width:proposal.width ?? 320,height:proposal.height ?? 240)}
     func updateNSView(_ view:AVPlayerView,context:Context){}
     static func dismantleNSView(_ view:AVPlayerView,coordinator:()){view.player?.pause();view.player?.replaceCurrentItem(with:nil);view.player=nil}
 }
 struct GIFImageView:NSViewRepresentable {
     let url:URL;let playing:Bool
     func makeNSView(context:Context)->NSImageView{let view=NSImageView();view.image=NSImage(contentsOf:url);view.imageScaling = .scaleProportionallyUpOrDown;view.animates=playing;return view}
+    func sizeThatFits(_ proposal:ProposedViewSize,nsView:NSImageView,context:Context)->CGSize?{CGSize(width:proposal.width ?? 320,height:proposal.height ?? 240)}
     func updateNSView(_ view:NSImageView,context:Context){view.animates=playing}
     static func dismantleNSView(_ view:NSImageView,coordinator:()){view.animates=false;view.image=nil}
 }
 struct GIFPreview:View {
     let url:URL
     @State var playing=true
-    var body:some View{VStack{GIFImageView(url:url,playing:playing);Button(playing ? "暂停" : "播放"){playing.toggle()}}}
+    var body:some View{VStack(spacing:8){GeometryReader{area in GIFImageView(url:url,playing:playing).frame(width:area.size.width,height:area.size.height).clipped()};Button(playing ? "暂停" : "播放"){playing.toggle()}.fixedSize()}}
 }
 struct PreviewSheet:View {
     let item:PreviewItem
     @Environment(\.dismiss) var dismiss
     var body:some View {
         VStack(spacing:12){
-            HStack{VStack(alignment:.leading){Text(item.name).font(.headline).lineLimit(1);Text("视频与 GIF 可直接播放；视频默认静音，可用播放器控件开启声音。").font(.caption).foregroundStyle(.secondary)};Spacer();Button("完成"){dismiss()}.keyboardShortcut(.cancelAction)}
+            HStack{VStack(alignment:.leading){Text(item.name).font(.headline).lineLimit(1);Text("视频与 GIF 可直接播放；视频默认静音，可用播放器控件开启声音。").font(.caption).foregroundStyle(.secondary)};Spacer();Button{dismiss()}label:{Label("关闭",systemImage:"xmark")}.keyboardShortcut(.cancelAction).fixedSize().accessibilityIdentifier("preview-close")}
             HStack(spacing:12){if let original=item.original{pane(original,"原文件")};pane(item.output,item.label)}
             HStack{Text("系统预览不支持的媒体可使用外部播放器打开。").font(.caption).foregroundStyle(.secondary);Spacer();Button("打开压缩结果"){NSWorkspace.shared.open(item.output)}}
-        }.padding(20).frame(width:800,height:540)
+        }.padding(16).frame(width:760,height:500).background(Color(nsColor:.windowBackgroundColor))
     }
     @ViewBuilder func previewMedia(_ url:URL)->some View {
         if url.pathExtension.lowercased()=="gif"{GIFPreview(url:url)}
@@ -98,7 +101,7 @@ struct PreviewSheet:View {
         else{QuickPreview(url:url)}
     }
     func pane(_ url:URL,_ title:String)->some View{
-        VStack(spacing:8){Text(title).font(.subheadline).fontWeight(.medium);previewMedia(url).background(Color(nsColor:.controlBackgroundColor)).clipShape(RoundedRectangle(cornerRadius:12))}.frame(maxWidth:.infinity)
+        VStack(spacing:8){Text(title).font(.subheadline).fontWeight(.medium).lineLimit(1).fixedSize(horizontal:false,vertical:true);GeometryReader{area in previewMedia(url).frame(width:area.size.width,height:area.size.height).background(Color(nsColor:.controlBackgroundColor)).clipShape(RoundedRectangle(cornerRadius:12))}}.frame(maxWidth:.infinity,maxHeight:.infinity)
     }
 }
 struct MainView:View {
@@ -123,7 +126,7 @@ struct MainView:View {
     var header:some View {
         HStack(spacing:12){
             Image(systemName:"arrow.down.right.and.arrow.up.left").font(.system(size:18,weight:.semibold)).foregroundStyle(accent).frame(width:36,height:36).background(accent.opacity(0.10),in:RoundedRectangle(cornerRadius:12)).overlay(RoundedRectangle(cornerRadius:12).strokeBorder(.white.opacity(0.6))).accessibilityHidden(true)
-            VStack(alignment:.leading,spacing:2){Text("GS Master").font(.system(size:20,weight:.bold,design:.rounded));Text("本地压缩 · 1.6.0").font(.caption).foregroundStyle(.secondary)}
+            VStack(alignment:.leading,spacing:2){Text("GS Master").font(.system(size:20,weight:.bold,design:.rounded));Text("本地压缩 · 1.6.1").font(.caption).foregroundStyle(.secondary)}
             Spacer()
             Picker("导航",selection:$model.showingHistory){Text("压缩队列").tag(false);Text("历史 \(model.history.count)").tag(true)}.pickerStyle(.segmented).labelsHidden().frame(width:180)
             Button(action:model.addPanel){Label("添加",systemImage:"plus").font(.system(size:14,weight:.semibold)).foregroundStyle(.white).frame(minWidth:72,minHeight:28)}.buttonStyle(ActionButtonStyle(prominent:true)).disabled(model.busy).keyboardShortcut("o")
@@ -131,17 +134,27 @@ struct MainView:View {
     }
     var settings:some View {
         VStack(alignment:.leading,spacing:8){
-            HStack(spacing:12){Text("压缩程度").fontWeight(.medium);Picker("压缩程度",selection:$model.preset){Text("不压缩").tag("none");Text(model.videoFormat=="gif" ? "保色优先" : "无损").tag("lossless");Text("高清").tag("quality");Text("均衡").tag("balanced");Text("极小").tag("small")}.pickerStyle(.segmented).labelsHidden().frame(maxWidth:400);Spacer()}
-            HStack{Picker("图片最长边",selection:$model.imageMaxDimension){Text("保留尺寸").tag(0);ForEach([480,640,960,1280,1920,2560,3840],id:\.self){Text("\($0) px").tag($0)}}.frame(width:240).disabled(["none","lossless"].contains(model.preset));Spacer();Toggle("原地覆盖",isOn:$model.overwrite);if model.overwrite{Toggle("覆盖前备份",isOn:$model.backup)}}
-            HStack(spacing:8){Image(systemName:"folder").foregroundStyle(.secondary);Text(model.output).lineLimit(1).truncationMode(.middle).foregroundStyle(.secondary).help(model.output);Button("更改位置…",action:model.chooseOutput).buttonStyle(.plain).foregroundStyle(controlInk);Spacer()}
+            ViewThatFits(in:.horizontal){
+                HStack(spacing:12){compressionPicker.frame(width:330);imageSizePicker.frame(width:210);Spacer(minLength:0);overwriteOptions}
+                VStack(alignment:.leading,spacing:8){HStack{compressionPicker.frame(maxWidth:420);Spacer();overwriteOptions};HStack{imageSizePicker.frame(width:240);Spacer()}}
+            }
             Divider()
-            HStack{Text("视频设置").fontWeight(.semibold);Spacer();Picker("视频格式转为",selection:$model.videoFormat){Text("原格式").tag("same");Text("MP4").tag("mp4");Text("WebM").tag("webm");Text("GIF").tag("gif")}.frame(width:240);Button{model.advanced.toggle()}label:{Label("特殊选项",systemImage:model.advanced ? "chevron.up":"chevron.down")}.buttonStyle(.plain).foregroundStyle(controlInk)}
+            HStack(spacing:16){Picker("视频格式转为",selection:$model.videoFormat){Text("原格式").tag("same");Text("MP4").tag("mp4");Text("WebM").tag("webm");Text("GIF").tag("gif")}.frame(width:240);Button{model.advanced.toggle()}label:{Label("特殊选项",systemImage:model.advanced ? "chevron.up":"chevron.down")}.buttonStyle(.plain).foregroundStyle(controlInk);Spacer()}
             if model.advanced {
                 HStack{Picker("最长边",selection:$model.maxDimension){Text("保留尺寸").tag(0);ForEach([480,640,960,1280,1920,2560,3840],id:\.self){Text("\($0) px").tag($0)}}.disabled(["none","lossless"].contains(model.preset)&&model.videoFormat != "gif");Picker("帧率",selection:$model.fps){Text("自动 / 保留").tag(0);ForEach([8,12,15,24,30,60],id:\.self){Text("\($0) fps").tag($0)}}.disabled(["none","lossless"].contains(model.preset)&&model.videoFormat != "gif");Toggle("移除音轨",isOn:$model.mute).disabled(model.videoFormat=="gif")}
             }
             if model.videoFormat=="gif"{Text("GIF 最多 256 色，转换始终需要量化，无法保证无损；不含声音、默认无限循环。").font(.caption).foregroundStyle(.secondary)}
             else if ["none","lossless"].contains(model.preset){Text("原格式不压缩直接保留；视频转格式仅重封装，目标容器需兼容原音视频流。").font(.caption).foregroundStyle(.secondary)}
         }.font(.system(size:12)).padding(14).modifier(GlassPanel()).disabled(model.busy)
+    }
+    var compressionPicker:some View {
+        HStack(spacing:8){Text("压缩程度").fontWeight(.medium);Picker("压缩程度",selection:$model.preset){Text("不压缩").tag("none");Text(model.videoFormat=="gif" ? "保色优先" : "无损").tag("lossless");Text("高清").tag("quality");Text("均衡").tag("balanced");Text("极小").tag("small")}.pickerStyle(.segmented).labelsHidden()}
+    }
+    var imageSizePicker:some View {
+        Picker("图片最长边",selection:$model.imageMaxDimension){Text("保留尺寸").tag(0);ForEach([480,640,960,1280,1920,2560,3840],id:\.self){Text("\($0) px").tag($0)}}.disabled(["none","lossless"].contains(model.preset))
+    }
+    var overwriteOptions:some View {
+        HStack(spacing:10){Toggle("原地覆盖",isOn:$model.overwrite);if model.overwrite{Toggle("覆盖前备份",isOn:$model.backup)}}.fixedSize()
     }
     var queue:some View {
         VStack(spacing:0){

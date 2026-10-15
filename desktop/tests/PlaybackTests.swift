@@ -24,6 +24,14 @@ import AVKit
   precondition(image.animates && image.image != nil)
   let frames=image.image!.representations.compactMap{($0 as? NSBitmapImageRep)?.value(forProperty:.frameCount) as? Int}.max() ?? 0
   precondition(frames>1,"GIF must preserve animation frames")
+  let sheet=NSHostingView(rootView:PreviewSheet(item:PreviewItem(name:"大尺寸视频与 GIF 预览",original:root.appendingPathComponent("playback.mp4"),output:root.appendingPathComponent("playback-large.gif"),label:"导出结果")))
+  window.setContentSize(NSSize(width:760,height:500));window.contentView=sheet
+  sheet.layoutSubtreeIfNeeded();RunLoop.main.run(until:Date().addingTimeInterval(0.3))
+  guard let fittedGIF=imageView(sheet),let fittedVideo=playerView(sheet) else{fatalError("Missing media panes")}
+  precondition(fittedGIF.bounds.width>300 && fittedGIF.bounds.width<380 && fittedGIF.bounds.height<420,"Large GIF must fit its half of the preview")
+  precondition(fittedVideo.bounds.width>300 && fittedVideo.bounds.width<380 && fittedVideo.bounds.height<420,"Video must fit its half of the preview")
+  let rep=sheet.bitmapImageRepForCachingDisplay(in:sheet.bounds)!;sheet.cacheDisplay(in:sheet.bounds,to:rep)
+  try rep.representation(using:.png,properties:[:])!.write(to:root.appendingPathComponent("ui-preview-fit.png"))
   print("PASS: embedded video advances, muted by default; GIF animation enabled with multiple frames")
  }
 }
