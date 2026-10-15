@@ -18,6 +18,7 @@ import SwiftUI
     model.rows=mode == "empty" ? []:populatedRows
     model.advanced=mode == "empty" || mode == "video"
     model.videoFormat=mode == "video" ? "gif":"same"
+    model.overwrite=mode == "video";model.backup=true
     model.showingHistory=mode == "history"
     let host=NSHostingView(rootView:MainView(model:model).environment(\.colorScheme,dark ? .dark:.light))
     let win=NSWindow(contentRect:NSRect(x:0,y:0,width:800,height:620),styleMask:[.borderless],backing:.buffered,defer:false)
